@@ -83,7 +83,7 @@ def test_kanji_detection():
     s = '点茗' #Characters directly from the standard
     qr = pyqrcode.create(s)
     eq_('kanji', qr.mode)
-    eq_(s.encode('shiftjis'), qr.builder.data)
+    eq_(s.encode('shiftjis'), qr.builder.encoded_data)
 
 def test_kanji_encoding():
     s = '点茗' #Characters directly from the standard

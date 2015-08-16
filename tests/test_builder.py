@@ -9,7 +9,8 @@ from pyqrcode import builder
 
 def test_illegal_mode():
     try:
-        builder.QRCodeBuilder('test', 1, mode='murks', error='M')
+        b = builder.QRCodeBuilder( version=1, error='M')
+        b.add_data( 'test', 'murks' )
         raise Exception('Expected an error for illegal mode')
     except ValueError as ex:
         ok_('murks' in str(ex))
@@ -17,7 +18,8 @@ def test_illegal_mode():
 
 def test_illegal_error():
     try:
-        builder.QRCodeBuilder('123', version=40, mode='numeric', error='R')
+        b = builder.QRCodeBuilder( version=40, error='R')
+        b.add_data( '123', 'numeric' )
         raise Exception('Expected an error for illegal mode')
     except ValueError as ex:
         ok_('R' in str(ex))
@@ -25,7 +27,8 @@ def test_illegal_error():
 
 def test_illegal_version():
     try:
-        builder.QRCodeBuilder('123', version=41, mode='numeric', error='M')
+        b = builder.QRCodeBuilder( version=41, error='M')
+        b.add_data( '123', 'numeric')
         raise Exception('Expected an error for illegal mode')
     except ValueError as ex:
         ok_('41' in str(ex))

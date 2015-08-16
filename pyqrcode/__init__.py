@@ -227,10 +227,10 @@ class QRCode:
                                  'version {}).'.format(version, self.version))
 
         #Build the QR code
-        self.builder = builder.QRCodeBuilder(data=self.data,
-                                             version=self.version,
-                                             mode=self.mode,
-                                             error=self.error)
+        self.builder = builder.QRCodeBuilder(version=self.version, error=self.error)
+        self.builder.add_data( self.data, self.mode )
+        self.builder.finalize( )
+        self.builder.make_code( )
 
         #Save the code for easier reference
         self.code = self.builder.code

@@ -57,17 +57,8 @@ class QRCodeBuilder:
     QR code Debugger:
         http://qrlogo.kaarposoft.dk/qrdecode.html
     """
-    def __init__(self, data, version, mode, error):
+    def __init__(self, version, error):
         """See :py:class:`pyqrcode.QRCode` for information on the parameters."""
-        #Set what data we are going to use to generate
-        #the QR code
-        self.data = data
-
-        #Check that the user passed in a valid mode
-        if mode in tables.modes:
-            self.mode = tables.modes[mode]
-        else:
-            raise ValueError('{0} is not a valid mode.'.format(mode))
 
         #Check that the user passed in a valid error level
         if error in tables.error_level:
@@ -88,11 +79,6 @@ class QRCodeBuilder:
         #This property will hold the binary string as it is built
         self.buffer = io.StringIO()
 
-        #Create the binary data block
-        self.add_data()
-
-        #Create the actual QR code
-        self.make_code()
 
     def grouper(self, n, iterable, fillvalue=None):
         """This generator yields a set of tuples, where the
@@ -115,7 +101,7 @@ class QRCodeBuilder:
         """
         return '{{0:0{0}b}}'.format(length).format(int(data))
 
-    def get_data_length(self):
+    def get_data_length(self, data, mode):
         """QR codes contain a "data length" field. This method creates this
         field. A binary string representing the appropriate length is
         returned.
@@ -130,42 +116,42 @@ class QRCodeBuilder:
         elif 27 <= self.version <= 40:
             max_version = 40
 
-        data_length = tables.data_length_field[max_version][self.mode]
+        data_length = tables.data_length_field[max_version][mode]
 
-        if self.mode != tables.modes['kanji']:
-            length_string = self.binary_string(len(self.data), data_length)
+        if mode != tables.modes['kanji']:
+            length_string = self.binary_string(len(data), data_length)
         else:
-            length_string = self.binary_string(len(self.data) / 2, data_length)
+            length_string = self.binary_string(len(data) / 2, data_length)
 
         if len(length_string) > data_length:
             raise ValueError('The supplied data will not fit '
                                'within this version of a QRCode.')
         return length_string
 
-    def encode(self):
+    def encode(self, data, mode):
         """This method encodes the data into a binary string using
         the appropriate algorithm specified by the mode.
         """
-        if self.mode == tables.modes['alphanumeric']:
-            encoded = self.encode_alphanumeric()
-        elif self.mode == tables.modes['numeric']:
-            encoded = self.encode_numeric()
-        elif self.mode == tables.modes['binary']:
-            encoded = self.encode_bytes()
-        elif self.mode == tables.modes['kanji']:
-            encoded = self.encode_kanji()
+        if mode == tables.modes['alphanumeric']:
+            encoded = self.encode_alphanumeric( data )
+        elif mode == tables.modes['numeric']:
+            encoded = self.encode_numeric( data )
+        elif mode == tables.modes['binary']:
+            encoded = self.encode_bytes( data )
+        elif mode == tables.modes['kanji']:
+            encoded = self.encode_kanji( data )
         return encoded
 
-    def encode_alphanumeric(self):
+    def encode_alphanumeric(self, data):
         """This method encodes the QR code's data if its mode is
         alphanumeric. It returns the data encoded as a binary string.
         """
         #Convert the string to upper case
-        self.data = self.data.upper()
+        data = data.upper( )
 
         #Change the data such that it uses a QR code ascii table
         ascii = []
-        for char in self.data:
+        for char in data:
             if isinstance(char, int):
                 ascii.append(tables.ascii_codes[chr(char)])
             else:
@@ -184,13 +170,13 @@ class QRCodeBuilder:
             #Return the binary string
             return buf.getvalue()
 
-    def encode_numeric(self):
+    def encode_numeric(self, data):
         """This method encodes the QR code's data if its mode is
         numeric. It returns the data encoded as a binary string.
         """
         with io.StringIO() as buf:
             #Break the number into groups of three digits
-            for triplet in self.grouper(3, self.data):
+            for triplet in self.grouper(3, data):
                 number = ''
                 for digit in triplet:
                     #Only build the string if digit is not None
@@ -214,19 +200,19 @@ class QRCodeBuilder:
                 buf.write(bin)
             return buf.getvalue()
 
-    def encode_bytes(self):
+    def encode_bytes(self, data):
         """This method encodes the QR code's data if its mode is
         8 bit mode. It returns the data encoded as a binary string.
         """
         with io.StringIO() as buf:
-            for char in self.data:
+            for char in data:
                 if not isinstance(char, int):
                     buf.write('{{0:0{0}b}}'.format(8).format(ord(char)))
                 else:
                     buf.write('{{0:0{0}b}}'.format(8).format(char))
             return buf.getvalue()
 
-    def encode_kanji(self):
+    def encode_kanji(self, data):
         """This method encodes the QR code's data if its mode is
         kanji. It returns the data encoded as a binary string.
         """
@@ -246,10 +232,10 @@ class QRCodeBuilder:
                 yield (next_byte(data[i]) << 8) | next_byte(data[i+1])
 
         #Force the data into Kanji encoded bytes
-        if isinstance(self.data, bytes):
-            data = self.data.decode('shiftjis').encode('shiftjis')
+        if isinstance(data, bytes):
+            data = data.decode('shiftjis').encode('shiftjis')
         else:
-            data = self.data.encode('shiftjis')
+            data = data.encode('shiftjis')
         
         #Now perform the algorithm that will make the kanji into 13 bit fields
         with io.StringIO() as buf:
@@ -269,24 +255,7 @@ class QRCodeBuilder:
             #Return the binary string
             return buf.getvalue()
 
-
-    def add_data(self):
-        """This function properly constructs a QR code's data string. It takes
-        into account the interleaving pattern required by the standard.
-        """
-        #Encode the data into a QR code
-        self.buffer.write(self.binary_string(self.mode, 4))
-        self.buffer.write(self.get_data_length())
-        self.buffer.write(self.encode())
-
-        #Converts the buffer into "code word" integers.
-        #The online debugger outputs them this way, makes
-        #for easier comparisons.
-        #s = self.buffer.getvalue()
-        #for i in range(0, len(s), 8):
-        #    print(int(s[i:i+8], 2), end=',')
-        #print()
-        
+    def finalize(self):
         #Fix for issue #3: https://github.com/mnooner256/pyqrcode/issues/3#
         #I was performing the terminate_bits() part in the encoding.
         #As per the standard, terminating bits are only supposed to
@@ -371,6 +340,25 @@ class QRCodeBuilder:
                 data_buffer.write(self.binary_string(block[i], 8))
 
         self.buffer = data_buffer
+
+    def add_data(self, data, mode):
+        """This function properly constructs a QR code's data string. It takes
+        into account the interleaving pattern required by the standard.
+        """
+        
+        #Check that the user passed in a valid mode
+        if mode in tables.modes:
+            mode = tables.modes[mode]
+        else:
+            raise ValueError('{0} is not a valid mode.'.format(mode))
+        
+        #Encode the data into a QR code
+        self.buffer.write(self.binary_string(mode, 4))
+        self.buffer.write(self.get_data_length(data,mode))
+        self.buffer.write(self.encode(data,mode))
+        self.encoded_data = data
+
+
 
     def terminate_bits(self, payload):
         """This method adds zeros to the end of the encoded data so that the
